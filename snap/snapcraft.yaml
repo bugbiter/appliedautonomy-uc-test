@@ -2,7 +2,7 @@ name: appliedautonomy-uc-test
 version: '0.1' # just for humans, typically '1.2+git' or '1.3.2'
 summary: Test Ubuntu Core snap built on C and make # 79 char long summary
 description: |
-  Test snap for Ubuntu Core built on C with make for RPi
+  Test snap for Ubuntu Core built in C with make for RPi B+
 
 grade: devel # must be 'stable' to release into candidate/stable channels
 confinement: devmode # use 'strict' once you have the right plugs and slots
@@ -14,7 +14,7 @@ architectures:
 apps:
   appliedautonomy-uc-test:
     command: mytest
-    plugs: [gpio-memory-control, io-ports-control]
+    plugs: [gpio-memory-control]
     
 parts:
   my-part:

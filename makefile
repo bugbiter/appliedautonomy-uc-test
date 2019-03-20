@@ -1,2 +1,2 @@
 install: mytest.c
-	gcc -o ./mytest mytest.c -lbcm2835
+	gcc -o ./mqtt-telemetry mqtt-telemetry.cpp -lbcm2835
