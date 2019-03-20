@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "bcm2835.h"
 
-#define PIN RPI_BPLUS_GPIO_J8_21
+#define PIN RPI_BPLUS_GPIO_J8_40 //GPIO21
 
 int main()
 {
