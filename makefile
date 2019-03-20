@@ -1,2 +1,2 @@
 install: mytest.c
-	gcc mytest.c -o ./mytest
+	gcc -o ./mytest mytest.c -lbcm2835
