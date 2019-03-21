@@ -22,34 +22,6 @@
 #define TRACE 1 /* Set to 1 to enable tracing */
 #define PIN RPI_BPLUS_GPIO_J8_40 //GPIO21
 
-struct {
-  char* address;
-  enum { clientid_maxlen = 256, clientid_size };
-  char clientid[clientid_size];
-  char* deviceid;
-  char* keypath;
-  char* projectid;
-  char* region;
-  char* registryid;
-  char* rootpath;
-  enum { topic_maxlen = 256, topic_size };
-  char topic[topic_size];
-  char* payload;
-  char* algorithm;
-} opts = {
-  .address = "ssl://mqtt.googleapis.com:8883",
-  .clientid = "projects/appliedautonomybackend/locations/europe-west1/registries/rest-registry/devices/Iot_rpi3",
-  .deviceid = "Iot_rpi3",
-  .keypath = "ec_private.pem",
-  .projectid = "appliedautonomybackend",
-  .region = "europe-west1",
-  .registryid = "rest-registry",
-  .rootpath = "roots.pem",
-  .topic = "/devices/Iot_rpi3/events",
-  .payload = "Hello world!",
-  .algorithm = "ES256"
-};
-
 volatile MQTTClient_deliveryToken deliveredtoken;
 
 void delivered(void *context, MQTTClient_deliveryToken dt)
@@ -173,6 +145,152 @@ static char* CreateJwt(const char* ec_private_path, const char* project_id, cons
   return out;
 }
 
+struct {
+  char* address;
+  enum { clientid_maxlen = 256, clientid_size };
+  char clientid[clientid_size];
+  char* deviceid;
+  char* keypath;
+  char* projectid;
+  char* region;
+  char* registryid;
+  char* rootpath;
+  enum { topic_maxlen = 256, topic_size };
+  char topic[topic_size];
+  char* payload;
+  char* algorithm;
+} opts = {
+  .address = "ssl://mqtt.googleapis.com:8883",
+  .clientid = "projects/p/locations/europe-west1/registries/r/devices/d",
+  .deviceid = "d",
+  .keypath = "ec_private.pem",
+  .projectid = "p",
+  .region = "europe-west1",
+  .registryid = "r",
+  .rootpath = "roots.pem",
+  .topic = "/devices/d/events",
+  .payload = "",
+  .algorithm = "ES256"
+};
+
+void Usage() {
+  printf("mqtt-telemetry\\\n");
+  printf("\t--deviceid <your device id>\\\n");
+  printf("\t--region <e.g. us-central1>\\\n");
+  printf("\t--registryid <your registry id>\\\n");
+  printf("\t--projectid <your project id>\\\n");
+  printf("\t--keypath <e.g. ./ec_private.pem>\\\n");
+  printf("\t--rootpath <e.g. ./roots.pem>\n\n");
+}
+
+/**
+ * Helper to parse arguments passed to app. Returns false if there are missing
+ * or invalid arguments; otherwise, returns true indicating the caller should
+ * free the calculated client ID placed on the opts structure.
+ *
+ * TODO: (class) Consider getopt
+ */
+// [START iot_mqtt_opts]
+bool GetOpts(int argc, char** argv) {
+  int pos = 1;
+  bool calcvalues = false;
+  bool calctopic = true;
+
+  if (argc < 2) {
+    return false;
+  }
+
+  //opts.payload = argv[1];
+
+  while (pos < argc) {
+    if (strcmp(argv[pos], "--deviceid") == 0) {
+      if (++pos < argc) {
+        opts.deviceid = argv[pos];
+        calcvalues = true;
+      }
+      else
+        return false;
+    } else if (strcmp(argv[pos], "--region") == 0) {
+      if (++pos < argc) {
+        opts.region = argv[pos];
+        calcvalues = true;
+      }
+      else
+        return false;
+    } else if (strcmp(argv[pos], "--registryid") == 0) {
+      if (++pos < argc) {
+        opts.registryid = argv[pos];
+        calcvalues = true;
+      }
+      else
+        return false;
+    } else if (strcmp(argv[pos], "--projectid") == 0) {
+      if (++pos < argc) {
+        opts.projectid = argv[pos];
+        calcvalues = true;
+      }
+      else
+        return false;
+    } else if (strcmp(argv[pos], "--keypath") == 0) {
+      if (++pos < argc)
+        opts.keypath = argv[pos];
+      else
+        return false;
+    } else if (strcmp(argv[pos], "--rootpath") == 0) {
+      if (++pos < argc)
+        opts.rootpath = argv[pos];
+      else
+        return false;
+    } else if (strcmp(argv[pos], "--topic") == 0) {
+      if (++pos < argc) {
+        strcpy((char * restrict)&opts.topic,argv[pos]);
+        calctopic=false;
+      } else
+        return false;
+    } else if (strcmp(argv[pos], "--algorithm") == 0) {
+      if (++pos < argc)
+        opts.algorithm = argv[pos];
+      else
+        return false;
+    }
+    pos++;
+  }
+  if (calctopic) {
+    int n = snprintf(opts.topic, sizeof(opts.topic),
+        "/devices/%s/events",
+        opts.deviceid);
+    if (n < 0) {
+      printf("Encoding error!\n");
+      return false;
+    }
+    if (n > sizeof(opts.topic)) {
+      printf("Error, buffer for storing device ID was too small.\n");
+      return false;
+    }
+  }
+  if (calcvalues) {
+    int n = snprintf(opts.clientid, sizeof(opts.clientid),
+        "projects/%s/locations/%s/registries/%s/devices/%s",
+        opts.projectid, opts.region, opts.registryid, opts.deviceid);
+    if (n < 0 || (n > clientid_maxlen)) {
+      if (n < 0) {
+        printf("Encoding error!\n");
+      } else {
+        printf("Error, buffer for storing client ID was too small.\n");
+      }
+      return false;
+    }
+    if (TRACE) {
+      printf("New client id constructed:\n");
+      printf("%s\n", opts.clientid);
+    }
+
+    return true; // Caller must free opts.clientid
+  }
+  return false;
+}
+// [END iot_mqtt_opts]
+
 static const int kQos = 1;
 static const unsigned long kTimeout = 10000L;
 static const char* kUsername = "ignored";
@@ -244,25 +362,29 @@ int Publish(char* payload, int payload_size) {
 
 int main(int argc, char* argv[])
 {
-  if (!bcm2835_init())
-    return 1;
+  if (GetOpts(argc, argv)) {
+    if (!bcm2835_init())
+      return 1;
   
-  // set RPI pin to be an input
-  bcm2835_gpio_fsel(PIN, BCM2835_GPIO_FSEL_INPT);
+    // set RPI pin to be an input
+    bcm2835_gpio_fsel(PIN, BCM2835_GPIO_FSEL_INPT);
 
-  OpenSSL_add_all_algorithms();
-  OpenSSL_add_all_digests();
-  OpenSSL_add_all_ciphers();
+    OpenSSL_add_all_algorithms();
+    OpenSSL_add_all_digests();
+    OpenSSL_add_all_ciphers();
 
-  while (1)
-  {
-    // Read some data
-    uint8_t value = bcm2835_gpio_lev(PIN);
-    printf("GPIO21: %d\n", value);
-    opts.payload = value;
-    int result = Publish(opts.payload, strlen(opts.payload));
-    // wait a bit
-    delay(1000);
+    while (1)
+    {
+      // Read some data
+      uint8_t value = bcm2835_gpio_lev(PIN);
+      printf("GPIO21: %d\n", value);
+      opts.payload = value;
+      int result = Publish(opts.payload, strlen(opts.payload));
+      // wait a bit
+      delay(1000);
+    }
+  } else {
+    Usage();
   }
 
   bcm2835_close();
